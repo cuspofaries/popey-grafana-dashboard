@@ -1,0 +1,692 @@
+# Grafana Dashboard for Popeye - Annotated Version
+
+## Overview
+This dashboard displays Kubernetes cluster health metrics from Popeye scans.
+Metrics are pushed to Prometheus Pushgateway and scraped by Prometheus.
+
+## Dashboard Structure
+
+```json
+{
+  // ============================================
+  // METADATA & CONFIGURATION
+  // ============================================
+  "annotations": {
+    "list": []  // No annotations needed for this dashboard
+  },
+  "editable": true,  // Allow users to edit the dashboard
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,  // Will be auto-assigned on import
+  "links": [],
+  
+  // ============================================
+  // PANELS SECTION
+  // ============================================
+  "panels": [
+    
+    // ----------------------------------------
+    // PANEL 1: Header with Popeye Logo
+    // ----------------------------------------
+    {
+      "id": 100,
+      "type": "text",  // Text panel for HTML content
+      "gridPos": {
+        "h": 3,    // Height: 3 units
+        "w": 24,   // Width: full width (24 units)
+        "x": 0,    // Position X: start
+        "y": 0     // Position Y: top
+      },
+      "options": {
+        "content": "<div style=\"display: flex; align-items: center; padding: 10px;\">\n  <img src=\"https://raw.githubusercontent.com/derailed/popeye/master/assets/popeye_logo.png\" width=\"80\" style=\"margin-right: 20px;\">\n  <h1 style=\"color: #a6e22e; font-size: 48px; margin: 0;\">Popeye K8s Cluster Scan</h1>\n</div>",
+        "mode": "html"
+      },
+      "transparent": true  // No background
+    },
+    
+    // ----------------------------------------
+    // ROW 1: Grades Section (Collapsible)
+    // ----------------------------------------
+    {
+      "id": 200,
+      "type": "row",  // Row type for grouping panels
+      "title": "Grades",
+      "collapsed": false,  // Expanded by default
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 3
+      }
+    },
+    
+    // ----------------------------------------
+    // PANEL 2: Overall Cluster Score Gauge
+    // ----------------------------------------
+    {
+      "id": 1,
+      "type": "gauge",  // Gauge visualization
+      "title": "Overall Score",
+      "gridPos": {
+        "h": 8,
+        "w": 8,    // 1/3 of the width
+        "x": 0,
+        "y": 4
+      },
+      "targets": [
+        {
+          "expr": "popeye_cluster_score",  // PromQL query
+          "legendFormat": "{{cluster}} ({{grade}})"  // Display cluster name and grade
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",     // 0-59: Red (poor)
+                "value": null
+              },
+              {
+                "color": "orange",  // 60-69: Orange (needs improvement)
+                "value": 60
+              },
+              {
+                "color": "green",   // 70-100: Green (good)
+                "value": 70
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "showThresholdMarkers": true,
+        "text": {
+          "valueSize": 48  // Large font for the score
+        }
+      }
+    },
+    
+    // ----------------------------------------
+    // PANEL 3: Pods Score Gauge
+    // ----------------------------------------
+    {
+      "id": 2,
+      "type": "gauge",
+      "title": "Pods",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 4
+      },
+      "targets": [
+        {
+          // Calculate average pod score
+          // popeye_linter_tally_total gives counts by severity
+          // Multiply by 20 to approximate a 0-100 score
+          "expr": "avg(popeye_linter_tally_total{linter=\"pods\"}) * 20",
+          "legendFormat": "Pods"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "orange", "value": 60},
+              {"color": "green", "value": 70}
+            ]
+          }
+        }
+      }
+    },
+    
+    // ----------------------------------------
+    // PANEL 4: Deployments Score Gauge
+    // ----------------------------------------
+    {
+      "id": 3,
+      "type": "gauge",
+      "title": "Deployments",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 4
+      },
+      "targets": [
+        {
+          "expr": "avg(popeye_linter_tally_total{linter=\"deployments\"}) * 20",
+          "legendFormat": "Deployments"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "orange", "value": 60},
+              {"color": "green", "value": 70}
+            ]
+          }
+        }
+      }
+    },
+    
+    // ----------------------------------------
+    // ROW 2: ScanCodes Section (Collapsible)
+    // ----------------------------------------
+    {
+      "id": 300,
+      "type": "row",
+      "title": "ScanCodes",
+      "collapsed": true,  // Collapsed by default to save space
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 12
+      },
+      "panels": [
+        // ----------------------------------------
+        // PANEL 5: Issue Codes Details Table
+        // ----------------------------------------
+        {
+          "id": 301,
+          "type": "table",
+          "title": "Issue Codes Details",
+          "gridPos": {
+            "h": 12,
+            "w": 24,
+            "x": 0,
+            "y": 13
+          },
+          "targets": [
+            {
+              // Query: Get all issue codes with count > 0
+              "expr": "popeye_code_total > 0",
+              "format": "table",
+              "instant": true  // Instant query (not time-series)
+            }
+          ],
+          "transformations": [
+            {
+              // Transformation: Organize columns
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  // Hide internal Prometheus labels
+                  "Time": true,
+                  "container": true,
+                  "endpoint": true,
+                  "instance": true,
+                  "job": true,
+                  "namespace": true,
+                  "pod": true,
+                  "service": true
+                },
+                "renameByName": {
+                  // Rename columns for better readability
+                  "Value": "Count",
+                  "cluster": "Cluster",
+                  "code": "Code",
+                  "linter": "Resource Type",
+                  "severity": "Severity"
+                }
+              }
+            }
+          ],
+          "fieldConfig": {
+            "overrides": [
+              {
+                // Color-code Severity column
+                "matcher": {"id": "byName", "options": "Severity"},
+                "properties": [
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background",
+                      "mode": "gradient"
+                    }
+                  },
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "error": {"color": "red", "text": "ERROR"},
+                          "warn": {"color": "orange", "text": "WARN"},
+                          "info": {"color": "blue", "text": "INFO"}
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                // Add gradient background to Count column
+                "matcher": {"id": "byName", "options": "Count"},
+                "properties": [
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background",
+                      "mode": "gradient"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "sortBy": [
+              {
+                "displayName": "Count",
+                "desc": true  // Sort by count descending
+              }
+            ],
+            "footer": {
+              "show": true  // Show total count in footer
+            }
+          }
+        },
+        
+        // ----------------------------------------
+        // PANEL 6: Help Text - Error Codes Reference
+        // ----------------------------------------
+        {
+          "id": 302,
+          "type": "text",
+          "gridPos": {
+            "h": 4,
+            "w": 24,
+            "x": 0,
+            "y": 25
+          },
+          "options": {
+            "mode": "markdown",
+            "content": "**💡 For complete details (resource names, error messages):**\n\n```bash\n# View latest JSON reports\nls -lt /var/log/popeye-reports/ | head -5\n\n# View last report\ncat /var/log/popeye-reports/popeye-report-*.json | jq .\n\n# View only errors\ncat /var/log/popeye-reports/popeye-report-*.json | jq '.popeye.sanitizers[] | select(.issues != null)'\n```\n\n**Common Popeye Error Codes:**\n- **102**: No resource limits\n- **206**: No liveness probe\n- **208**: No readiness probe\n- **300**: No CPU requests\n- **302**: No memory requests\n- **306**: No CPU limits\n- **400**: Unused ConfigMap/Secret\n- **1204**: Container image not using latest tag"
+          },
+          "transparent": true
+        }
+      ]
+    },
+    
+    // ----------------------------------------
+    // ROW 3: Severities Section (Collapsible)
+    // ----------------------------------------
+    {
+      "id": 400,
+      "type": "row",
+      "title": "Severities",
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
+      "panels": [
+        // ----------------------------------------
+        // PANEL 7: Severities Summary Table
+        // ----------------------------------------
+        {
+          "id": 401,
+          "type": "table",
+          "title": "Severities Summary",
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 14
+          },
+          "targets": [
+            {
+              // Query: Get severity totals
+              "expr": "popeye_severity_total",
+              "format": "table",
+              "instant": true
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "instance": true,
+                  "job": true
+                },
+                "renameByName": {
+                  "Value": "Count",
+                  "cluster": "Cluster",
+                  "severity": "Severity"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    
+    // ----------------------------------------
+    // ROW 4: Linters Section (Always Expanded)
+    // ----------------------------------------
+    {
+      "id": 500,
+      "type": "row",
+      "title": "Linters",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      }
+    },
+    
+    // ----------------------------------------
+    // PANEL 8: Errors by Linter Table
+    // ----------------------------------------
+    {
+      "id": 501,
+      "type": "table",
+      "title": "Errors",
+      "gridPos": {
+        "h": 10,
+        "w": 8,    // 1/3 width
+        "x": 0,
+        "y": 15
+      },
+      "targets": [
+        {
+          // Query: Get error counts by linter type
+          "expr": "popeye_linter_tally_total{severity=\"error\"}",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "cluster": true,
+              "severity": true,  // Hide severity since we know it's "error"
+              "instance": true,
+              "job": true
+            },
+            "renameByName": {
+              "Value": "",      // Empty header for cleaner look
+              "linter": ""
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "overrides": [
+          {
+            // Add red gradient background to error counts
+            "matcher": {"id": "byName", "options": "Value"},
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "red", "value": 1}  // Any error is red
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    
+    // ----------------------------------------
+    // PANEL 9: Warnings by Linter Table
+    // ----------------------------------------
+    {
+      "id": 502,
+      "type": "table",
+      "title": "Warnings",
+      "gridPos": {
+        "h": 10,
+        "w": 8,
+        "x": 8,
+        "y": 15
+      },
+      "targets": [
+        {
+          "expr": "popeye_linter_tally_total{severity=\"warn\"}",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "cluster": true,
+              "severity": true,
+              "instance": true,
+              "job": true
+            },
+            "renameByName": {
+              "Value": "",
+              "linter": ""
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "overrides": [
+          {
+            // Add orange gradient for warnings
+            "matcher": {"id": "byName", "options": "Value"},
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "yellow", "value": 1},
+                    {"color": "orange", "value": 5}
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    
+    // ----------------------------------------
+    // PANEL 10: Info by Linter Table
+    // ----------------------------------------
+    {
+      "id": 503,
+      "type": "table",
+      "title": "Info",
+      "gridPos": {
+        "h": 10,
+        "w": 8,
+        "x": 16,
+        "y": 15
+      },
+      "targets": [
+        {
+          "expr": "popeye_linter_tally_total{severity=\"info\"}",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "cluster": true,
+              "severity": true,
+              "instance": true,
+              "job": true
+            },
+            "renameByName": {
+              "Value": "",
+              "linter": ""
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "overrides": [
+          {
+            // Add blue gradient for info
+            "matcher": {"id": "byName", "options": "Value"},
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "blue", "value": 1}
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  
+  // ============================================
+  // DASHBOARD SETTINGS
+  // ============================================
+  "refresh": "30s",  // Auto-refresh every 30 seconds
+  "schemaVersion": 39,
+  "tags": ["kubernetes", "popeye", "security"],
+  
+  // ============================================
+  // VARIABLES (TEMPLATE)
+  // ============================================
+  "templating": {
+    "list": [
+      {
+        // Variable: Datasource selector
+        "name": "DS_PROMETHEUS",
+        "type": "datasource",
+        "query": "prometheus",
+        "label": "Datasource",
+        "hide": 0  // Show in dashboard
+      }
+    ]
+  },
+  
+  // ============================================
+  // TIME RANGE
+  // ============================================
+  "time": {
+    "from": "now-6h",  // Default: last 6 hours
+    "to": "now"
+  },
+  
+  "timezone": "browser",
+  "title": "PopDash - Popeye K8s Cluster Scan",
+  "uid": "popeye-advanced",
+  "version": 1
+}
+```
+
+## Key Concepts Explained
+
+### 1. GridPos System
+Grafana uses a 24-column grid:
+- `h`: Height in units
+- `w`: Width (max 24 for full width)
+- `x`: Horizontal position (0-23)
+- `y`: Vertical position
+
+### 2. PromQL Queries Used
+
+| Query | Description |
+|-------|-------------|
+| `popeye_cluster_score` | Overall cluster health score (0-100) |
+| `popeye_linter_tally_total` | Count by resource type and severity |
+| `popeye_code_total` | Specific error code counts |
+| `popeye_severity_total` | Total counts by severity level |
+| `popeye_report_errors_total` | Total critical errors |
+
+### 3. Threshold Colors
+
+- **Red** (0-59): Poor - needs immediate attention
+- **Orange** (60-69): Fair - needs improvement
+- **Green** (70-100): Good - healthy state
+
+### 4. Panel Types Used
+
+- **Gauge**: Circular progress indicator for scores
+- **Table**: Detailed breakdowns with sorting and filtering
+- **Text**: Static content and documentation
+- **Row**: Grouping and collapsible sections
+
+### 5. Transformations
+
+Transformations clean up Prometheus label data:
+- **Organize**: Rename/hide columns
+- **Filter**: Remove unnecessary data
+- **Format**: Apply custom formatting
+
+### 6. Instant vs Range Queries
+
+- **Instant** (`instant: true`): Current value only (for tables)
+- **Range** (`range: true`): Time-series data (for graphs)
+
+## Usage Tips
+
+1. **Customize thresholds**: Adjust color thresholds based on your requirements
+2. **Add more panels**: Clone existing panels for additional resource types
+3. **Filter by cluster**: Add a cluster variable for multi-cluster setups
+4. **Export/Import**: Use the JSON for version control
+
+## Credits
+
+Dashboard structure inspired by the official Popeye dashboard.
+Created with assistance from Claude Sonnet 4.5.
